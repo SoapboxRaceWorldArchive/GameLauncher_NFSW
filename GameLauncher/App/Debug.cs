@@ -60,7 +60,7 @@ namespace GameLauncher.App
             string Firewall = String.Empty;
             string AntiSpyware = String.Empty;
 
-            if (!DetectLinux.UnixDetected())
+            if (!DetectLinux.LinuxDetected())
             {
                 try
                 {
@@ -79,21 +79,10 @@ namespace GameLauncher.App
             string LauncherPosition = "";
             string OS = "";
 
-            if (DetectLinux.WineDetected())
-            {
-                OS = "Wine";
-            }
-            else if (DetectLinux.LinuxDetected())
-            {
-                OS = "Linux";
-            }
-            else if (DetectLinux.MacOSDetected()) {
-                OS = "MacOS";
-            }
-            else
-            {
-                OS = (from x in new ManagementObjectSearcher("SELECT Caption FROM Win32_OperatingSystem").Get().Cast<ManagementObject>()
-                      select x.GetPropertyValue("Caption")).FirstOrDefault().ToString();
+            if (DetectLinux.LinuxDetected()) {
+                OS = DetectLinux.Distro();
+            } else {
+                OS = Environment.OSVersion.VersionString;
             }
 
             if (SettingFile.Read("LauncherPosX") + "x" + SettingFile.Read("LauncherPosY") == "x")
@@ -109,7 +98,7 @@ namespace GameLauncher.App
             ulong lpFreeBytesAvailable = 0;
             List<string> GPUs = new List<string>();
             string Win32_Processor = "";
-            if (!DetectLinux.UnixDetected())
+            if (!DetectLinux.LinuxDetected())
             {
                 Kernel32.GetPhysicallyInstalledSystemMemory(out memKb);
 
@@ -146,16 +135,7 @@ namespace GameLauncher.App
                 new ListType{ Name = "", Value = "" },
             };
 
-			if (DetectLinux.UnixDetected()) {
-				var embedded = Directory.Exists("wine");
-				settings.Add(new ListType { Name = "Embedded Wine", Value = embedded.ToString() });
-				if (!embedded) {
-					settings.Add(new ListType { Name = "Wine version", Value = WineManager.GetWineVersion() });
-				}
-				settings.Add(new ListType { Name = "", Value = "" });
-			}
-
-            if (!DetectLinux.UnixDetected())
+            if (!DetectLinux.LinuxDetected())
             {
                 settings.AddRange(new[] {
                     new ListType{ Name = "Antivirus", Value = Antivirus },

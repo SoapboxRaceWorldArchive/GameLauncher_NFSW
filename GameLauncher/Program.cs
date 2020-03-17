@@ -12,18 +12,23 @@ using GameLauncher.App.Classes.Logger;
 using GameLauncher.HashPassword;
 using GameLauncherReborn;
 using Nancy;
-using SharpRaven;
-using SharpRaven.Data;
 using IniParser;
 using GameLauncher.App.Classes.GPU;
 using static MeTonaTOR.MessageBox;
+using System.Reflection;
+using Newtonsoft.Json;
+using System.Linq;
 //using Memes;
 
 namespace GameLauncher {
     internal static class Program {
         [STAThread]
         internal static void Main() {
-            Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.Idle;
+            try {
+                new WebClient().DownloadData("http://l.mtntr.pl/generate_204.php");
+            } catch(Exception) {
+                MessageBox.Show("There's no internet connection, launcher might crash");
+            }
 
             Console.WriteLine("Application path: " + Path.GetDirectoryName(Application.ExecutablePath));
 
@@ -47,13 +52,31 @@ namespace GameLauncher {
             MeTonaTOR.MessageBox.Show(getinfo.DriverVersion());*/
 
             if (!Self.hasWriteAccessToFolder(Path.GetDirectoryName(Application.ExecutablePath))) {
-                MeTonaTOR.MessageBox.Show("This application requires admin priviledge. Restarting...");
+                MessageBox.Show("This application requires admin priviledge. Restarting...");
                 Self.runAsAdmin();
             }
 
             IniFile _settingFile = new IniFile("Settings.ini");
 
-            if (!string.IsNullOrEmpty(_settingFile.Read("DisableVerifyHash"))) {
+            if (DetectLinux.LinuxDetected()) {
+                if (!_settingFile.KeyExists("InstallationDirectory")) {
+                    _settingFile.Write("InstallationDirectory", "GameFiles");
+                }
+
+                if (!_settingFile.KeyExists("CDN")) {
+                    try {
+                        List<CDNObject> CDNList = new List<CDNObject>();
+                        WebClientWithTimeout wc3 = new WebClientWithTimeout();
+                        String _slresponse = wc3.DownloadString(Self.CDNUrlList);
+                        CDNList = JsonConvert.DeserializeObject<List<CDNObject>>(_slresponse);
+                        _settingFile.Write("CDN", CDNList.First().url);
+                    } catch {
+                        _settingFile.Write("CDN", "http://cdn.worldunited.gg/gamefiles/packed/");
+                    }
+                }
+            }
+
+            if (!_settingFile.KeyExists("DisableVerifyHash")) {
                 _settingFile.Write("DisableVerifyHash", "1");
             }
 
@@ -61,7 +84,7 @@ namespace GameLauncher {
                 Console.WriteLine("Game path: " + _settingFile.Read("InstallationDirectory"));
 
                 if (!Self.hasWriteAccessToFolder(_settingFile.Read("InstallationDirectory"))) {
-                    MeTonaTOR.MessageBox.Show("This application requires admin priviledge. Restarting...");
+                    MessageBox.Show("This application requires admin priviledge. Restarting...");
                     Self.runAsAdmin();
                 }
             }
@@ -78,12 +101,10 @@ namespace GameLauncher {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(true);
 
-            Form SplashScreen2 = null;
-
             Log.Debug("Checking current directory");
 
             if (Self.isTempFolder(Directory.GetCurrentDirectory())) {
-                MeTonaTOR.MessageBox.Show(null, "Please, extract me and my DLL files before executing...", "GameLauncher", _MessageBoxButtons.OK, _MessageBoxIcon.Stop);
+                MessageBox.Show(null, "Please, extract me and my DLL files before executing...", "GameLauncher", MessageBoxButtons.OK, MessageBoxIcon.Stop);
                 Environment.Exit(0);
             }
 
@@ -114,10 +135,10 @@ namespace GameLauncher {
                 Log.Debug("Checking Proxy");
                 ServerProxy.Instance.Start();
                 Log.Debug("Starting MainScreen");
-                Application.Run(new MainScreen(SplashScreen2));
+                Application.Run(new MainScreen());
             } else {
                 if (NFSW.isNFSWRunning()) {
-                    MeTonaTOR.MessageBox.Show(null, "An instance of Need for Speed: World is already running", "GameLauncher", _MessageBoxButtons.OK, _MessageBoxIcon.Exclamation);
+                    MessageBox.Show(null, "An instance of Need for Speed: World is already running", "GameLauncher", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
                     Process.GetProcessById(Process.GetCurrentProcess().Id).Kill();
                 }
 
@@ -125,7 +146,7 @@ namespace GameLauncher {
                 try {
                     if (mutex.WaitOne(0, false)) {
                         string[] files = {
-                            "DiscordRPC.dll - 1.0.0.0",
+                            "DiscordRPC.dll - 1.0.150.0",
                             "Flurl.dll - 2.8.2",
                             "Flurl.Http.dll - 2.4.2",
                             "INIFileParser.dll - 2.5.2",
@@ -136,7 +157,6 @@ namespace GameLauncher {
                             "Nancy.dll - 2.0.0",
                             "Nancy.Hosting.Self.dll - 2.0.0",
                             "Newtonsoft.Json.dll - 12.0.3",
-                            "SharpRaven.dll - 2.4.0",
                             "System.Runtime.InteropServices.RuntimeInformation.dll - 4.6.24705.01. Commit Hash: 4d1af962ca0fede10beb01d197367c2f90e92c97"
                         };
 
@@ -187,10 +207,10 @@ namespace GameLauncher {
                             AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(UnhandledExceptionEventHandler);
                             
                             Log.Debug("Starting MainScreen");
-                            Application.Run(new MainScreen(SplashScreen2));
+                            Application.Run(new MainScreen());
                         }
                     } else {
-                        MeTonaTOR.MessageBox.Show(null, "An instance of Launcher is already running.", "GameLauncher", _MessageBoxButtons.OK, _MessageBoxIcon.Error);
+                        MessageBox.Show(null, "An instance of Launcher is already running.", "GameLauncher", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 } finally {
                     mutex.Close();
@@ -201,10 +221,6 @@ namespace GameLauncher {
 
         static void UnhandledExceptionEventHandler(object sender, UnhandledExceptionEventArgs e) {
             Exception exception = (Exception)e.ExceptionObject;
-            exception.Data.Add("BuildHash", SHA.HashFile(AppDomain.CurrentDomain.FriendlyName));
-
-            var ravenClient = new RavenClient("https://12973f6fa1054f51a8e3a840e7dc021c@sentry.io/1325472");
-            ravenClient.Capture(new SentryEvent(exception));
 
             using (ThreadExceptionDialog dialog = new ThreadExceptionDialog(exception)) {
                 dialog.ShowDialog();
@@ -216,10 +232,6 @@ namespace GameLauncher {
 
         static void ThreadExceptionEventHandler(object sender, ThreadExceptionEventArgs e) {
             Exception exception = (Exception)e.Exception;
-            exception.Data.Add("BuildHash", SHA.HashFile(AppDomain.CurrentDomain.FriendlyName));
-
-            var ravenClient = new RavenClient("https://12973f6fa1054f51a8e3a840e7dc021c@sentry.io/1325472");
-            ravenClient.Capture(new SentryEvent(exception));
 
             using (ThreadExceptionDialog dialog = new ThreadExceptionDialog(exception)) {
                 dialog.ShowDialog();
